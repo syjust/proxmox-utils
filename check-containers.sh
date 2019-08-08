@@ -59,7 +59,7 @@ run() {
         eval "`grep -E "^(net0)" $conf | awk -F, '{print $4" "$5}'`"
         # size (rootf)
         eval "`grep -E "^(rootfs)" $conf | awk -F, '{print $NF}'`"
-        printf "$fmt_body" $container_id $hostname $State ${memory}M $cores $ip $hwaddr $size "`cat $tmp_error | tr '\n' ' / '`" | grep -E "$FILTER"
+        printf "$fmt_body" $container_id ${hostname%%.*} $State ${memory}M $cores $ip $hwaddr $size "`cat $tmp_error | tr '\n' ' / '`" | grep -E "$FILTER"
         if [ $? -eq 0 ] ; then
             sum $memory $cores $size
         fi
