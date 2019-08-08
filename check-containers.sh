@@ -19,12 +19,16 @@ export -f usage
 
 export CORES_SUM=0
 export MEMORY_SUM=0
+export DISK_SUM=0
 # {{{ function sum
 # summarize memory & cores informations
 #
 sum() {
     export MEMORY_SUM=$(($MEMORY_SUM+$1))
     export CORES_SUM=$(($CORES_SUM+$2))
+    if [[ ! -z ${3} ]] ; then
+        export DISK_SUM=$(($DISK_SUM+${3/G/}))
+    fi
 }
 export -f sum
 # }}}
@@ -33,12 +37,12 @@ export -f sum
 #
 run() {
     local bar="----------------------------------------"
-    local HEAD="ID NAME STATE MEM CORES ERROR"
-    local BAR="$bar $bar $bar $bar $bar $bar"
-    local fmt_head="%-3s %-15s %-8s %6s %5s %-.38s\n"
-    local fmt_body="%-3s %-15s %-8s %6s %5s %-.35s...\n"
-    local fmt_bare="%.3s %.15s %.8s %.6s %.5s %.38s\n"
-    local fmt_foot="%-3s %-15s %8s %6s %5s %-.38s\n"
+    local HEAD="ID NAME STATE MEM CORES IP MAC DISK ERROR"
+    local BAR="$bar $bar $bar $bar $bar $bar $bar $bar $bar"
+    local fmt_head="%-3s %-15s %-8s %6s %5s %18s %17s %5s %-.38s\n"
+    local fmt_body="%-3s %-15s %-8s %6s %5s %18s %17s %5s %-.35s...\n"
+    local fmt_bare="%.3s %.15s %.8s %.6s %.5s %.18s %.17s %.5s %.38s\n"
+    local fmt_foot="%-3s %-15s %8s %6s %5s %18s %17s %5s %-.38s\n"
     local tmp_error="`mktemp /tmp/error-XXXXXXX.tmp`"
     local tmp_output="`mktemp /tmp/output-XXXXXXX.tmp`"
     local tmp_file container_id memory cores hostname State
@@ -46,17 +50,24 @@ run() {
     printf "$fmt_head" $HEAD
     printf "$fmt_bare" $BAR
     for container_id in `lxc-ls 2>/dev/null` ; do
+        conf="/etc/pve/nodes/prox-sloth/lxc/$container_id.conf"
+        # State
         eval "`lxc-info --name $container_id 2>$tmp_error | grep "State" | sed 's/:[[:blank:]]\{1,\}/=/'`"
-        eval "`grep -E "(memory|cores|hostname)" /etc/pve/nodes/prox-sloth/lxc/$container_id.* | sed 's/:[[:blank:]]\{1,\}/=/'`"
-        printf "$fmt_body" $container_id $hostname $State $memory $cores "`cat $tmp_error | tr '\n' ' / '`" | grep -E "$FILTER"
+        # memory cores hostname
+        eval "`grep -E "^(memory|cores|hostname)" $conf | sed 's/:[[:blank:]]\{1,\}/=/'`"
+        # ip hwaddr (net0)
+        eval "`grep -E "^(net0)" $conf | awk -F, '{print $4" "$5}'`"
+        # size (rootf)
+        eval "`grep -E "^(rootfs)" $conf | awk -F, '{print $NF}'`"
+        printf "$fmt_body" $container_id $hostname $State ${memory}M $cores $ip $hwaddr $size "`cat $tmp_error | tr '\n' ' / '`" | grep -E "$FILTER"
         if [ $? -eq 0 ] ; then
-            sum $memory $cores
+            sum $memory $cores $size
         fi
     done > $tmp_output
     cat $tmp_output | sort -k $FIELD
     printf "$fmt_bare" $BAR
     [ $PRINT_SUM -eq 1 ] \
-        && printf "$fmt_foot" "" "" "SUM:" $MEMORY_SUM $CORES_SUM "" \
+        && printf "$fmt_foot" "" "" "SUM:" "$((${MEMORY_SUM}/1024))G" $CORES_SUM "" "" "${DISK_SUM}G" "" \
         && printf "$fmt_bare" $BAR
 
     for tmp_file in ${!tmp_*} ; do
