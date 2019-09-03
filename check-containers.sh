@@ -50,7 +50,7 @@ run() {
     printf "$fmt_head" $HEAD
     printf "$fmt_bare" $BAR
     for container_id in `lxc-ls 2>/dev/null` ; do
-        conf="/etc/pve/nodes/prox-sloth/lxc/$container_id.conf"
+        conf="/etc/pve/nodes/`hostname`/lxc/$container_id.conf"
         # State
         eval "`lxc-info --name $container_id 2>$tmp_error | grep "State" | sed 's/:[[:blank:]]\{1,\}/=/'`"
         # memory cores hostname
